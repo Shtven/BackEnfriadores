@@ -1,8 +1,10 @@
 package com.codespace.simulator.audit;
 
 import com.codespace.simulator.models.TemperaturaEvent;
+import com.codespace.simulator.services.AlarmaService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -13,6 +15,9 @@ import java.util.concurrent.BlockingQueue;
 public class AuditThread implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AuditThread.class);
+
+    @Autowired
+    private AlarmaService alarmaService;
 
     private final BlockingQueue<TemperaturaEvent> auditQueue;
     private final AuditService auditService;  //  la transacción al @Service
@@ -30,7 +35,10 @@ public class AuditThread implements ApplicationRunner {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     TemperaturaEvent event = auditQueue.take();
-                    auditService.procesarEvento(event);  // ✅ pasa por proxy de Spring
+                    auditService.procesarEvento(event);
+                    if (event.getTemperatura() != null && event.getCuartoId() != null) {
+                        alarmaService.evaluar(event.getCuartoId(), event.getTemperatura());
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     log.warn("AuditThread interrumpido");

@@ -24,7 +24,7 @@ public class AuditService {
         this.eventoPuertaRepo = eventoPuertaRepo;
     }
 
-    @Transactional  // ✅ aquí sí funciona — Spring intercepta via proxy
+    @Transactional
     public void procesarEvento(TemperaturaEvent event) {
         String topic = event.getTopic() != null ? event.getTopic() : "";
         try {
@@ -41,8 +41,8 @@ public class AuditService {
     private void persistirTemperatura(TemperaturaEvent event) {
         LecturaTemperatura lectura = new LecturaTemperatura(
                 event.getCuartoId(), event.getSensorId(),
-                event.getTemperatura(), event.getHumedad(),
-                event.getTimestamp(), event.getTopic()
+                event.getTemperatura(), event.getTimestamp(),
+                event.getTopic()
         );
         lecturaRepo.save(lectura);
         log.debug("LecturaTemperatura guardada: cuarto={} temp={}",
@@ -51,10 +51,11 @@ public class AuditService {
 
     private void persistirPresencia(TemperaturaEvent envelope) {
         EventoPuerta evento = new EventoPuerta(
-                envelope.getCuartoId(), envelope.getSensorId(),
+                envelope.getCuartoId(),
                 "deteccion_presencia",
-                Boolean.TRUE,
-                envelope.getTimestamp(), envelope.getTopic()
+                "automatico",
+                null,
+                Boolean.TRUE
         );
         eventoPuertaRepo.save(evento);
         log.debug("EventoPuerta guardado: cuarto={}", evento.getCuartoId());
