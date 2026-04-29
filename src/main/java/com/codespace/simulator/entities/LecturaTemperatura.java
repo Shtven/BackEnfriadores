@@ -20,14 +20,9 @@ public class LecturaTemperatura {
     @Column(name = "temperatura", nullable = false)
     private Double temperatura;
 
-    @Column(name = "humedad")
-    private Double humedad;
-
-    // ✅ columna principal timestamp NOT NULL
     @Column(name = "timestamp", nullable = false)
     private Instant timestamp;
 
-    // ✅ estado_alarma NOT NULL
     @Column(name = "estado_alarma", nullable = false, length = 20)
     private String estadoAlarma;
 
@@ -52,12 +47,10 @@ public class LecturaTemperatura {
 
     public LecturaTemperatura() {}
 
-    public LecturaTemperatura(Integer cuartoId, String sensorId, Double temperatura,
-                              Double humedad, Instant timestamp, String topic) {
+    public LecturaTemperatura(Integer cuartoId, String sensorId, Double temperatura, Instant timestamp, String topic) {
         this.cuartoId    = cuartoId;
         this.sensorId    = sensorId;
         this.temperatura = temperatura;
-        this.humedad     = humedad;
         this.timestamp   = timestamp;
         this.timestampEvento = timestamp;
         this.topic       = topic;
@@ -105,14 +98,6 @@ public class LecturaTemperatura {
 
     public void setTemperatura(Double temperatura) {
         this.temperatura = temperatura;
-    }
-
-    public Double getHumedad() {
-        return humedad;
-    }
-
-    public void setHumedad(Double humedad) {
-        this.humedad = humedad;
     }
 
     public Instant getTimestampEvento() {

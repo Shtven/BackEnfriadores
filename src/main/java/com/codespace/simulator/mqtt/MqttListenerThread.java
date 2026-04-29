@@ -2,6 +2,7 @@ package com.codespace.simulator.mqtt;
 
 import com.codespace.simulator.models.PresenciaEvent;
 import com.codespace.simulator.models.TemperaturaEvent;
+import com.codespace.simulator.services.ControlService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
@@ -30,6 +31,7 @@ public class MqttListenerThread implements MqttCallback {
     @Value("${mqtt.password:}")
     private String mqttPassword;
 
+    private final ControlService controlService;
     private final BlockingQueue<TemperaturaEvent> auditQueue;
     private final MqttPublisher mqttPublisher;
     private final ObjectMapper objectMapper;
@@ -43,19 +45,27 @@ public class MqttListenerThread implements MqttCallback {
 
     public MqttListenerThread(BlockingQueue<TemperaturaEvent> auditQueue,
                               MqttPublisher mqttPublisher,
-                              ObjectMapper objectMapper) {
-        this.auditQueue    = auditQueue;
-        this.mqttPublisher = mqttPublisher;
-        this.objectMapper  = objectMapper;
+                              ObjectMapper objectMapper,
+                              ControlService controlService) {       // ← añadir
+        this.auditQueue     = auditQueue;
+        this.mqttPublisher  = mqttPublisher;
+        this.objectMapper   = objectMapper;
+        this.controlService = controlService;                        // ← añadir
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    public void start() throws MqttException {
-        mqttClient = new MqttClient(brokerUrl, clientId, new MemoryPersistence());
-        mqttClient.setCallback(this);
-        mqttClient.connect(buildConnectOptions());
-        mqttClient.subscribe("sei/cuartos/+/#", 1);
-        log.info("MqttListenerThread suscrito a: sei/cuartos/+/#");
+    public void start() {          // ← SIN "throws MqttException"
+        try {
+            mqttClient = new MqttClient(brokerUrl, clientId, new MemoryPersistence());
+            mqttClient.setCallback(this);
+            mqttClient.connect(buildConnectOptions());
+            mqttClient.subscribe("sei/cuartos/+/#", 1);
+            log.info("MqttListenerThread suscrito a: sei/cuartos/+/#");
+        } catch (MqttException e) {
+            log.error("No se pudo conectar al broker MQTT en {}. Error: {}",
+                    brokerUrl, e.getMessage());
+            // La app sigue viva — Paho reconectará solo cuando el broker esté disponible
+        }
     }
 
     private MqttConnectOptions buildConnectOptions() {
@@ -63,6 +73,7 @@ public class MqttListenerThread implements MqttCallback {
         opts.setAutomaticReconnect(true);
         opts.setKeepAliveInterval(60);
         opts.setCleanSession(false);
+        opts.setConnectionTimeout(10);
 
         if (mqttUsername != null && !mqttUsername.isBlank()) {
             opts.setUserName(mqttUsername);
@@ -104,9 +115,19 @@ public class MqttListenerThread implements MqttCallback {
 
         presenciaState.put(event.getCuartoId(), event.getPresencia());
 
+        // ACK al simulador
         String ackTopic = "sei/cuartos/" + event.getCuartoId() + "/presencia/ack";
         mqttPublisher.publish(ackTopic, "{\"status\":\"ok\"}");
 
+        // ── NUEVO: delegar lógica de control al ControlService ──
+        controlService.procesarEventoPuerta(
+                event.getCuartoId(),
+                event.getPresencia(),
+                event.getSensorId(),
+                null  // temperatura no viene en PresenciaEvent; se deja null
+        );
+
+        // Encolar para auditoría (igual que antes)
         TemperaturaEvent envelope = new TemperaturaEvent();
         envelope.setTopic(topic);
         envelope.setCuartoId(event.getCuartoId());

@@ -16,9 +16,6 @@ public class TemperaturaEvent {
     @JsonProperty("temperatura")
     private Double temperatura;
 
-    @JsonProperty("humedad")
-    private Double humedad;
-
     @JsonProperty("timestamp")
     private Instant timestamp;
 
@@ -47,14 +44,6 @@ public class TemperaturaEvent {
 
     public void setTemperatura(Double temperatura) {
         this.temperatura = temperatura;
-    }
-
-    public Double getHumedad() {
-        return humedad;
-    }
-
-    public void setHumedad(Double humedad) {
-        this.humedad = humedad;
     }
 
     public Instant getTimestamp() {

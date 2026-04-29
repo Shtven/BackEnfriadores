@@ -44,9 +44,10 @@ public class MqttPublisher {
         String uniqueId = "sei-publisher-" + java.util.UUID.randomUUID();
         mqttClient = new MqttClient(brokerUrl, uniqueId, new MemoryPersistence());
         MqttConnectOptions opts = new MqttConnectOptions();
-        opts.setAutomaticReconnect(false);
+        opts.setAutomaticReconnect(true);   // ← cambiar a true
         opts.setCleanSession(true);
         opts.setConnectionTimeout(10);
+        opts.setKeepAliveInterval(60);      // ← añadir
 
         if (mqttUsername != null && !mqttUsername.isBlank()) {
             opts.setUserName(mqttUsername);

@@ -10,5 +10,7 @@ public interface EventoPuertaRepository extends JpaRepository<EventoPuerta, Long
 
     List<EventoPuerta> findByCuartoId(Integer cuartoId);
 
-    List<EventoPuerta> findByCuartoIdAndTipo(Integer cuartoId, String tipo);
+    List<EventoPuerta> findByCuartoIdAndAccion(Integer cuartoId, String accion);
+
+    List<EventoPuerta> findByCuartoIdOrderByTimestampDesc(Integer cuartoId);
 }
