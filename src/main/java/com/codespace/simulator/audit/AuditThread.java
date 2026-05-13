@@ -36,9 +36,6 @@ public class AuditThread implements ApplicationRunner {
                 try {
                     TemperaturaEvent event = auditQueue.take();
                     auditService.procesarEvento(event);
-                    if (event.getTemperatura() != null && event.getCuartoId() != null) {
-                        alarmaService.evaluar(event.getCuartoId(), event.getTemperatura());
-                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     log.warn("AuditThread interrumpido");

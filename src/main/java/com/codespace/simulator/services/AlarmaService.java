@@ -1,8 +1,10 @@
 package com.codespace.simulator.services;
 
 import com.codespace.simulator.entities.Alarma;
+import com.codespace.simulator.entities.IntervencionManual;
 import com.codespace.simulator.mqtt.MqttPublisher;
 import com.codespace.simulator.repositories.AlarmaRepository;
+import com.codespace.simulator.repositories.IntervencionManualRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,13 +36,16 @@ public class AlarmaService {
     private final AlarmaRepository alarmaRepository;
     private final MqttPublisher    mqttPublisher;
     private final ObjectMapper     objectMapper;
+    private final IntervencionManualRepository intervencionManualRepository;
 
     public AlarmaService(AlarmaRepository alarmaRepository,
                          MqttPublisher mqttPublisher,
-                         ObjectMapper objectMapper) {
+                         ObjectMapper objectMapper,
+                         IntervencionManualRepository intervencionManualRepository) {
         this.alarmaRepository = alarmaRepository;
         this.mqttPublisher    = mqttPublisher;
         this.objectMapper     = objectMapper;
+        this.intervencionManualRepository = intervencionManualRepository;
     }
 
 
@@ -93,6 +98,15 @@ public class AlarmaService {
 
         estadoActual.put(cuartoId, "normal");
         publicarEstadoAlarma(cuartoId, "normal", 0.0, null);
+
+        // ← AGREGAR: persistir en intervenciones_manuales (T-12-02)
+        IntervencionManual im = new IntervencionManual(
+                operadorId, cuartoId,
+                "silenciar_alarma",
+                "Alarma crítica silenciada por operador");
+        im.setRolEnEjecucion("operador");
+        intervencionManualRepository.save(im);
+
         log.info("[Cuarto {}] Alarma crítica silenciada — operador_id={}", cuartoId, operadorId);
     }
 

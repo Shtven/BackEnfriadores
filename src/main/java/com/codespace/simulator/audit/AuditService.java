@@ -10,6 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
+
 @Service
 public class AuditService {
 
@@ -39,25 +41,32 @@ public class AuditService {
     }
 
     private void persistirTemperatura(TemperaturaEvent event) {
+        Integer sensorId = event.getSensorId() != null
+                ? event.getSensorId()
+                : event.getCuartoId();
         LecturaTemperatura lectura = new LecturaTemperatura(
-                event.getCuartoId(), event.getSensorId(),
+                event.getCuartoId(), sensorId,
                 event.getTemperatura(), event.getTimestamp(),
                 event.getTopic()
         );
         lecturaRepo.save(lectura);
-        log.debug("LecturaTemperatura guardada: cuarto={} temp={}",
-                lectura.getCuartoId(), lectura.getTemperatura());
+        log.debug("LecturaTemperatura guardada: cuarto={} sensor={} temp={}",
+                lectura.getCuartoId(), lectura.getSensorId(), lectura.getTemperatura());
     }
 
     private void persistirPresencia(TemperaturaEvent envelope) {
-        EventoPuerta evento = new EventoPuerta(
-                envelope.getCuartoId(),
-                "deteccion_presencia",
-                "automatico",
-                null,
-                Boolean.TRUE
-        );
-        eventoPuertaRepo.save(evento);
-        log.debug("EventoPuerta guardado: cuarto={}", evento.getCuartoId());
+        Integer sensorId = envelope.getSensorId() != null
+                ? envelope.getSensorId()
+                : envelope.getCuartoId();
+        EventoPuerta e = new EventoPuerta();
+        e.setCuartoId(envelope.getCuartoId());
+        e.setAccion("presencia");
+        e.setOrigen("sensor");
+        e.setSensorId(sensorId);          // <- usar la variable
+        e.setTimestamp(OffsetDateTime.now());
+        e.setTimestampRegistro(OffsetDateTime.now());
+        e.setTopic(envelope.getTopic());
+        eventoPuertaRepo.save(e);
+        log.debug("EventoPuerta guardado: cuarto={}", envelope.getCuartoId());
     }
 }

@@ -30,6 +30,9 @@ public class IntervencionManual {
     @Column(name = "alarma_id")
     private Integer alarmaId;
 
+    @Column(name = "rol_en_ejecucion")
+    private String rolEnEjecucion;
+
     @PrePersist
     protected void onCreate() {
         if (this.timestamp == null) this.timestamp = Instant.now();
@@ -67,4 +70,12 @@ public class IntervencionManual {
 
     public Integer getAlarmaId() { return alarmaId; }
     public void setAlarmaId(Integer alarmaId) { this.alarmaId = alarmaId; }
+
+    public String getRolEnEjecucion() {
+        return rolEnEjecucion;
+    }
+
+    public void setRolEnEjecucion(String rolEnEjecucion) {
+        this.rolEnEjecucion = rolEnEjecucion;
+    }
 }
