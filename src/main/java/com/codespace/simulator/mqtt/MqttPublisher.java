@@ -44,7 +44,7 @@ public class MqttPublisher {
         String uniqueId = "sei-publisher-" + java.util.UUID.randomUUID();
         mqttClient = new MqttClient(brokerUrl, uniqueId, new MemoryPersistence());
         MqttConnectOptions opts = new MqttConnectOptions();
-        opts.setAutomaticReconnect(true);   // ← cambiar a true
+        opts.setAutomaticReconnect(true);   // ← era false, cambiar a true
         opts.setCleanSession(true);
         opts.setConnectionTimeout(10);
         opts.setKeepAliveInterval(60);      // ← añadir
@@ -53,7 +53,6 @@ public class MqttPublisher {
             opts.setUserName(mqttUsername);
             opts.setPassword(mqttPassword.toCharArray());
         }
-
         mqttClient.connect(opts);
         log.info("MqttPublisher conectado: {}", uniqueId);
     }

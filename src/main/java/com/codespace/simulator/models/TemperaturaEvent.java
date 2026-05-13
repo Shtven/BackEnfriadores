@@ -11,7 +11,7 @@ public class TemperaturaEvent {
     private Integer cuartoId;
 
     @JsonProperty("sensor_id")
-    private String sensorId;
+    private Integer sensorId;
 
     @JsonProperty("temperatura")
     private Double temperatura;
@@ -30,11 +30,11 @@ public class TemperaturaEvent {
         this.cuartoId = cuartoId;
     }
 
-    public String getSensorId() {
+    public Integer getSensorId() {
         return sensorId;
     }
 
-    public void setSensorId(String sensorId) {
+    public void setSensorId(Integer sensorId) {
         this.sensorId = sensorId;
     }
 
