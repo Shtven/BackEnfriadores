@@ -30,6 +30,15 @@ public class Operador {
     @Column(name = "password_hash")
     private String passwordHash;
 
+    // ── Aprobacion HACCP (registro dinamico) ──────────────────────
+    // FK logica a operador.id de quien aprobo (no mapeada como relacion JPA
+    // para evitar lazy fetch innecesario en respuestas; se valida en el service).
+    @Column(name = "aprobado_por")
+    private Integer aprobadoPor;
+
+    @Column(name = "timestamp_aprobacion")
+    private OffsetDateTime timestampAprobacion;
+
     // Getters y Setters
     public Integer getId()           { return id; }
     public String getNombre()        { return nombre; }
@@ -38,6 +47,14 @@ public class Operador {
     public OffsetDateTime getCreadoEn() { return creadoEn; }
     public String getUsuario()       { return usuario; }
     public String getPasswordHash()  { return passwordHash; }
+    public Integer getAprobadoPor()  { return aprobadoPor; }
+    public OffsetDateTime getTimestampAprobacion() { return timestampAprobacion; }
+    public void setNombre(String nombre) { this.nombre = nombre; }
+    public void setRol(String rol) { this.rol = rol; }
+    public void setActivo(boolean activo) { this.activo = activo; }
+    public void setCreadoEn(OffsetDateTime creadoEn) { this.creadoEn = creadoEn; }
     public void setUsuario(String u) { this.usuario = u; }
     public void setPasswordHash(String h) { this.passwordHash = h; }
+    public void setAprobadoPor(Integer aprobadoPor) { this.aprobadoPor = aprobadoPor; }
+    public void setTimestampAprobacion(OffsetDateTime timestampAprobacion) { this.timestampAprobacion = timestampAprobacion; }
 }

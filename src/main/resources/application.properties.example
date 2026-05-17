@@ -1,0 +1,77 @@
+# ────────────────────────────────────────────────────────────────────
+# Plantilla de configuracion para el backend SEI (BackEnfriadores).
+#
+# Copia este archivo a `application.properties` y editalo con los
+# valores reales del entorno. El archivo real esta en .gitignore
+# para no exponer credenciales en el repo.
+#
+#   cp src/main/resources/application.properties.example \
+#      src/main/resources/application.properties
+# ────────────────────────────────────────────────────────────────────
+
+# ── Aplicacion ──────────────────────────────────────────────────────
+spring.application.name=simulator
+
+# snake_case global para todos los endpoints (contrato con HMI).
+spring.jackson.property-naming-strategy=SNAKE_CASE
+
+# UTF-8 forzado en la respuesta (evita "â" en lugar de "→").
+server.servlet.encoding.charset=UTF-8
+server.servlet.encoding.force=true
+server.servlet.encoding.force-response=true
+
+server.port=8080
+
+# ── Base de datos PostgreSQL ────────────────────────────────────────
+spring.datasource.url=jdbc:postgresql://<host>:<puerto>/<nombre_bd>
+spring.datasource.username=<usuario_postgres>
+spring.datasource.password=<password_postgres>
+
+# Mantener `update` mientras el schema esta en evolucion. En produccion
+# pasar a `validate` y usar migraciones explicitas.
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.open-in-view=false
+
+# Ejecutar schema.sql al arrancar (ver src/main/resources/schema.sql).
+spring.sql.init.mode=always
+spring.sql.init.continue-on-error=true
+
+# ── Broker EMQX ─────────────────────────────────────────────────────
+mqtt.broker.url=tcp://<ip_emqx>:1883
+mqtt.client.id=sei-iot-backend
+mqtt.topic.subscribe=sei/cuartos/+/#
+mqtt.username=<usuario_emqx>
+mqtt.password=<password_emqx>
+
+# ── Auditoria (cola en memoria para desacoplar MQTT de la BD) ───────
+audit.queue.capacity=10000000
+
+# ── Umbrales de alarma (HACCP) ──────────────────────────────────────
+# Setpoint=0 hace que los umbrales sean ABSOLUTOS (no relativos al setpoint):
+#   preventiva = temp > 3.0 °C
+#   critica    = temp > 4.0 °C
+alarma.setpoint=0.0
+alarma.umbral.preventiva=3.0
+alarma.umbral.critica=4.0
+
+# ── JWT (HS256) ─────────────────────────────────────────────────────
+# El secreto debe ser largo (>= 32 caracteres) y no compartirse.
+jwt.secret=<secreto_largo_minimo_32_caracteres>
+jwt.expiration-hours=8
+
+# ── Logica de control (Sprint 2 / 3) ────────────────────────────────
+# Id del operador "sistema" usado por acciones automaticas en auditoria.
+control.sistema.operador-id=1
+# Delay (segundos) antes de desactivar la cortina tras cierre de puerta.
+control.cortina.desactivar.delay-seg=5
+# Delay (segundos) antes de volver a potencia base tras forzado.
+control.refrigeracion.retorno.delay-seg=30
+# Potencia (%) cuando la puerta esta abierta.
+control.refrigeracion.potencia.alta=100
+# Potencia (%) en estado normal.
+control.refrigeracion.potencia.base=60
+
+# ── Logging ─────────────────────────────────────────────────────────
+logging.level.com.codespace.simulator=DEBUG
+logging.level.org.eclipse.paho=INFO
