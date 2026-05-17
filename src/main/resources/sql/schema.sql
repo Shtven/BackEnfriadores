@@ -141,7 +141,7 @@ CREATE INDEX IF NOT EXISTS idx_refrig_cuarto_ts
 -- Reemplazar los placeholders <bcrypt_hash_de_1234> antes de ejecutar.
 -- ──────────────────────────────────────────────────────────────────
 INSERT INTO operadores (nombre, usuario, password_hash, rol, activo, creado_en) VALUES
-    ('Juan Perez',    'jperez', '<bcrypt_hash_de_1234>', 'operador',   TRUE, NOW()),
-    ('Ana Lopez',     'alopez', '<bcrypt_hash_de_1234>', 'operador',   TRUE, NOW()),
-    ('Carlos Ruiz',   'cruiz',  '<bcrypt_hash_de_1234>', 'supervisor', TRUE, NOW())
+    ('Juan Perez',    'jperez', '$2b$10$2ue64kUHCK75qEYAM6dzEuSYH7n9Vej2OAJR2G5wiyoYAK.TwJg3m', 'operador',   TRUE, NOW()),
+    ('Ana Lopez',     'alopez', '$2b$10$6VhRlKokUGL5Djki21WZtu3QXd8y2r4UpKx7XAzjm62So1lff7GKG', 'operador',   TRUE, NOW()),
+    ('Carlos Ruiz',   'cruiz',  '$2b$10$LI3FnsVi9/mQXD0trTqZeeUmRPWDLjUChB/BvNGTXZrMqae5Tl2Qe', 'supervisor', TRUE, NOW())
 ON CONFLICT (usuario) DO NOTHING;
