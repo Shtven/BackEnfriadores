@@ -6,6 +6,7 @@ import com.codespace.simulator.mqtt.MqttPublisher;
 import com.codespace.simulator.repositories.AlarmaRepository;
 import com.codespace.simulator.repositories.IntervencionManualRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,6 +50,42 @@ public class AlarmaService {
     }
 
 
+    /**
+     * Devuelve el estado de alarma actual de un cuarto (normal | preventiva | critica).
+     * Usado por AuditService al persistir lecturas, para que el campo
+     * estado_alarma quede coherente con la evaluación del back y no con
+     * el valor por defecto "normal".
+     */
+    public String getEstadoActual(Integer cuartoId) {
+        return estadoActual.getOrDefault(cuartoId, "normal");
+    }
+
+    /**
+     * Cierra alarmas que quedaron con timestamp_fin=NULL en BD pero que el
+     * estado en memoria desconoce (típicamente por un reinicio durante una
+     * alarma activa). Sin esto el HMI muestra alarmas "fantasma" que el
+     * back nunca resolverá porque su estadoActual arranca vacío.
+     */
+    @PostConstruct
+    public void cerrarAlarmasHuerfanasAlArrancar() {
+        try {
+            var huerfanas = alarmaRepository.findByTimestampFinIsNull();
+            if (huerfanas.isEmpty()) {
+                log.info("[AlarmaService] No hay alarmas huérfanas al arrancar");
+                return;
+            }
+            Instant ahora = Instant.now();
+            for (Alarma a : huerfanas) {
+                a.setTimestampFin(ahora);
+                alarmaRepository.save(a);
+                log.warn("[AlarmaService] Cerrada alarma huérfana id={} cuarto={} tipo={}",
+                        a.getId(), a.getCuartoId(), a.getTipo());
+            }
+        } catch (Exception e) {
+            log.error("[AlarmaService] Error cerrando alarmas huérfanas: {}", e.getMessage());
+        }
+    }
+
     @Transactional
     public void evaluar(Integer cuartoId, Double temperatura) {
         registrarLectura(cuartoId, temperatura);
@@ -58,6 +95,15 @@ public class AlarmaService {
         if ("critica".equals(estadoAnterior)) {
             if (temperatura > setpoint + umbralCritica) {
                 actualizarPicoCritica(cuartoId, temperatura);
+                return;
+            }
+            // Resolución automática: si la temperatura volvió por debajo del
+            // umbral preventivo, cerramos la alarma crítica activa y bajamos
+            // a normal. Sin esto el cuarto queda permanentemente en "critica"
+            // aunque la temperatura sea normal (DEF-08) y todas las lecturas
+            // posteriores se persisten con estado_alarma=critica (DEF-04).
+            if (temperatura <= setpoint + umbralPreventiva) {
+                resolverCriticaAuto(cuartoId, temperatura);
             }
             return;
         }
@@ -142,6 +188,24 @@ public class AlarmaService {
         // T-05-01: Publicar estado crítico
         publicarEstadoAlarma(cuartoId, "critica", temperatura, alarma.getId());
         log.error("[Cuarto {}] CRÍTICA — temp={}°C", cuartoId, temperatura);
+    }
+
+    /**
+     * Resolución automática de alarma crítica cuando la temperatura
+     * vuelve por debajo del umbral preventivo. Cierra la alarma activa
+     * en BD (timestamp_fin) y baja estadoActual a "normal".
+     */
+    private void resolverCriticaAuto(Integer cuartoId, Double temperatura) {
+        alarmaRepository
+                .findByCuartoIdAndTimestampFinIsNull(cuartoId)
+                .ifPresent(a -> {
+                    a.setTimestampFin(Instant.now());
+                    alarmaRepository.save(a);
+                });
+
+        estadoActual.put(cuartoId, "normal");
+        publicarEstadoAlarma(cuartoId, "normal", temperatura, null);
+        log.info("[Cuarto {}] Crítica RESUELTA automáticamente — temp regresó a {}°C", cuartoId, temperatura);
     }
 
     private void resolverPreventiva(Integer cuartoId, Double temperatura) {

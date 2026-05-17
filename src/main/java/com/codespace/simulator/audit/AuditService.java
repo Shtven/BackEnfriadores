@@ -5,6 +5,7 @@ import com.codespace.simulator.entities.LecturaTemperatura;
 import com.codespace.simulator.models.TemperaturaEvent;
 import com.codespace.simulator.repositories.EventoPuertaRepository;
 import com.codespace.simulator.repositories.LecturaTemperaturaRepository;
+import com.codespace.simulator.services.AlarmaService;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,11 +20,14 @@ public class AuditService {
 
     private final LecturaTemperaturaRepository lecturaRepo;
     private final EventoPuertaRepository eventoPuertaRepo;
+    private final AlarmaService alarmaService;
 
     public AuditService(LecturaTemperaturaRepository lecturaRepo,
-                        EventoPuertaRepository eventoPuertaRepo) {
+                        EventoPuertaRepository eventoPuertaRepo,
+                        AlarmaService alarmaService) {
         this.lecturaRepo = lecturaRepo;
         this.eventoPuertaRepo = eventoPuertaRepo;
+        this.alarmaService = alarmaService;
     }
 
     @Transactional
@@ -49,6 +53,10 @@ public class AuditService {
                 event.getTemperatura(), event.getTimestamp(),
                 event.getTopic()
         );
+        // Sincroniza estado_alarma con el cálculo del back (AlarmaService),
+        // en vez del valor por defecto "normal" del constructor de la entidad.
+        // Sin esto el historial muestra "normal" aunque la temperatura sea crítica.
+        lectura.setEstadoAlarma(alarmaService.getEstadoActual(event.getCuartoId()));
         lecturaRepo.save(lectura);
         log.debug("LecturaTemperatura guardada: cuarto={} sensor={} temp={}",
                 lectura.getCuartoId(), lectura.getSensorId(), lectura.getTemperatura());
