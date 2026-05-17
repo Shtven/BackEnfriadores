@@ -52,8 +52,10 @@ public class MqttSubscriberService {
         mqttClient.subscribe("sei/cuartos/+/presencia",    1, this::manejarPresencia);
 
         // Sprint 3: topics de comando — requieren JWT válido de operador
-        mqttClient.subscribe("sei/cuartos/+/cmd",          1, this::manejarComando);
-        mqttClient.subscribe("sei/cuartos/+/puerta/cmd",   1, this::manejarComandoPuerta);
+        mqttClient.subscribe("sei/cuartos/+/cmd",                1, this::manejarComando);
+        mqttClient.subscribe("sei/cuartos/+/puerta/cmd",         1, this::manejarComandoPuerta);
+        mqttClient.subscribe("sei/cuartos/+/alarma/cmd",         1, this::manejarComandoAlarma);
+        mqttClient.subscribe("sei/cuartos/+/refrigeracion/cmd",  1, this::manejarComandoRefrigeracion);
 
         log.info("[MQTT] Suscripciones activas (Sprint 2 + Sprint 3)");
     }
@@ -236,6 +238,97 @@ public class MqttSubscriberService {
 
         } catch (Exception e) {
             log.error("[MQTT] Error procesando comando puerta en {}: {}", topic, e.getMessage());
+        }
+    }
+
+    // ── Handler dedicado para sei/cuartos/+/alarma/cmd ────────────
+    //
+    // Payload esperado (publicado por el HMI):
+    //   { "comando": "silenciar", "operador_id": N, "rol": "operador",
+    //     "jwt_token": "...", "cuarto_id": N, "timestamp": "..." }
+    //
+    // Valida JWT + rol=operador y delega en AlarmaService.silenciarCritica().
+    private void manejarComandoAlarma(String topic, MqttMessage message) {
+        try {
+            int      cuartoId = extraerCuartoId(topic);
+            JsonNode json     = objectMapper.readTree(message.getPayload());
+
+            if (!json.has("jwt_token")) {
+                rechazarComando(topic, cuartoId, "Sin jwt_token en payload", null);
+                return;
+            }
+
+            String token = json.get("jwt_token").asText();
+            if (!jwtService.esValido(token)) {
+                rechazarComando(topic, cuartoId, "JWT inválido o expirado", null);
+                return;
+            }
+
+            String  rol        = jwtService.getRol(token);
+            Integer operadorId = jwtService.getOperadorId(token);
+
+            if (!"operador".equals(rol)) {
+                rechazarComando(topic, cuartoId,
+                        "Rol no autorizado para alarma/cmd: " + rol, operadorId);
+                return;
+            }
+
+            String comando = json.has("comando") ? json.get("comando").asText() : "";
+            if (!"silenciar".equals(comando)) {
+                log.warn("[MQTT][ALARMA/CMD] Comando desconocido '{}' en cuarto {}", comando, cuartoId);
+                return;
+            }
+
+            alarmaService.silenciarCritica(cuartoId, operadorId);
+
+        } catch (Exception e) {
+            log.error("[MQTT] Error procesando comando alarma en {}: {}", topic, e.getMessage());
+        }
+    }
+
+    // ── Handler dedicado para sei/cuartos/+/refrigeracion/cmd ─────
+    //
+    // Payload esperado (publicado por el HMI):
+    //   { "comando": "forzar_encendido", "potencia_pct": N, "duracion_minutos": N,
+    //     "operador_id": N, "rol": "operador", "jwt_token": "...",
+    //     "cuarto_id": N, "timestamp": "..." }
+    //
+    // Valida JWT + rol=operador y delega en ControlService.forzarRefrigeracion().
+    private void manejarComandoRefrigeracion(String topic, MqttMessage message) {
+        try {
+            int      cuartoId = extraerCuartoId(topic);
+            JsonNode json     = objectMapper.readTree(message.getPayload());
+
+            if (!json.has("jwt_token")) {
+                rechazarComando(topic, cuartoId, "Sin jwt_token en payload", null);
+                return;
+            }
+
+            String token = json.get("jwt_token").asText();
+            if (!jwtService.esValido(token)) {
+                rechazarComando(topic, cuartoId, "JWT inválido o expirado", null);
+                return;
+            }
+
+            String  rol        = jwtService.getRol(token);
+            Integer operadorId = jwtService.getOperadorId(token);
+
+            if (!"operador".equals(rol)) {
+                rechazarComando(topic, cuartoId,
+                        "Rol no autorizado para refrigeracion/cmd: " + rol, operadorId);
+                return;
+            }
+
+            String comando = json.has("comando") ? json.get("comando").asText() : "";
+            if (!"forzar_encendido".equals(comando)) {
+                log.warn("[MQTT][REFRIG/CMD] Comando desconocido '{}' en cuarto {}", comando, cuartoId);
+                return;
+            }
+
+            controlService.forzarRefrigeracion(cuartoId, operadorId);
+
+        } catch (Exception e) {
+            log.error("[MQTT] Error procesando comando refrigeracion en {}: {}", topic, e.getMessage());
         }
     }
 
