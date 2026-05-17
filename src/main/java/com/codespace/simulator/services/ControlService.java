@@ -55,6 +55,9 @@ public class ControlService {
     // ── Mapas de estado Sprint 3 ──────────────────────────────────
     private final Map<Integer, Double>           temperaturaActual      = new ConcurrentHashMap<>();
     private final Map<Integer, Boolean>          presenciaActual        = new ConcurrentHashMap<>();
+    // Cache del último estado de puerta publicado, usado por ajustarRefrigeracion
+    // para inferir el motivo (PUERTA_ABIERTA vs NORMAL) sin recalcular.
+    private final Map<Integer, String>           estadoPuertaActual     = new ConcurrentHashMap<>();
     private final Map<Integer, ScheduledFuture<?>> pendientesCierrePuerta = new ConcurrentHashMap<>();
     private final Map<Integer, ScheduledFuture<?>> pendientesRefForzada   = new ConcurrentHashMap<>();
 
@@ -145,25 +148,35 @@ public class ControlService {
      */
     public void actualizarPresencia(Integer cuartoId, Boolean presencia, String sensorId) {
         presenciaActual.put(cuartoId, presencia);
+        String estadoPuerta = estadoPuertaActual.getOrDefault(cuartoId, "cerrada");
 
         if (Boolean.TRUE.equals(presencia)) {
-            // Alguien entró al cuarto — cancelar ciclo de cierre si estaba activo
+            // Alguien entró → cancelar cierre auto en curso si lo hay
             cancelarCiclosCierrePuerta(cuartoId);
+            // Edge-trigger: solo abrir la puerta si NO estaba ya abierta.
+            // Antes esto se llamaba en cada evento de presencia=true, lo que
+            // re-abría la puerta inmediatamente después de un cierre auto
+            // (DEF-02) y disparaba la cortina/refrigeración en cada ciclo.
+            if (!"abierta".equals(estadoPuerta)) {
+                manejarPuertaAbierta(cuartoId, temperaturaActual.get(cuartoId));
+            }
         } else {
-            // Nadie en el cuarto — evaluar si temperatura justifica cierre automático
-            evaluarCondicionCierrePuerta(cuartoId);
+            // Sin presencia: solo evaluar cierre si la puerta estaba abierta.
+            // No procesamos cierre cuando ya está cerrada o en proceso.
+            if ("abierta".equals(estadoPuerta)) {
+                evaluarCondicionCierrePuerta(cuartoId);
+            }
         }
-
-        // Delegar lógica Sprint 2 (cortina + refrigeración)
-        procesarEventoPuerta(cuartoId, presencia, sensorId, temperaturaActual.get(cuartoId));
     }
 
     /** T-07-02: Condición = temp > 4°C AND presencia=false AND sin ciclo activo */
     private void evaluarCondicionCierrePuerta(Integer cuartoId) {
-        Double  temp     = temperaturaActual.get(cuartoId);
-        Boolean presencia = presenciaActual.getOrDefault(cuartoId, true);
+        Double  temp      = temperaturaActual.get(cuartoId);
+        Boolean presencia = presenciaActual.get(cuartoId);
 
-        if (temp == null) return;
+        // Esperar hasta tener AMBOS valores reales para no decidir con presencia=true
+        // por defecto cuando aún no llega su primer evento del simulador.
+        if (temp == null || presencia == null) return;
 
         boolean cicloActivo = pendientesCierrePuerta.containsKey(cuartoId)
                 && !pendientesCierrePuerta.get(cuartoId).isDone();
@@ -195,6 +208,10 @@ public class ControlService {
             persistirEventoPuertaAsync(cuartoId, "cierre_automatico_completado",
                     temperaturaActual.get(cuartoId), false, cuartoId);
             pendientesCierrePuerta.remove(cuartoId);
+            // Sincronizar actuadores: cortina off + refrigeración a base.
+            // Sin esto la cortina queda activa tras el cierre (DEF-07 análogo).
+            desactivarCortina(cuartoId);
+            refrigeracionService.restaurarPotencia(cuartoId);
             log.info("[Cuarto {}] Ciclo de cierre COMPLETADO", cuartoId);
         }, DELAY_CIERRE_SEG, TimeUnit.SECONDS);
 
@@ -226,6 +243,7 @@ public class ControlService {
     }
 
     private void publicarEstadoPuerta(Integer cuartoId, String estado, String origen) {
+        estadoPuertaActual.put(cuartoId, estado);
         String topic = "sei/cuartos/" + cuartoId + "/puerta";
         publicar(topic, Map.of(
                 "cuarto_id", cuartoId,
@@ -250,12 +268,15 @@ public class ControlService {
         // Cancelar si ya había un forzado activo para este cuarto
         cancelarPendiente(pendientesRefForzada, cuartoId);
 
-        // T-10-03: publicar orden de refrigeración al 100%
-        String topic = "sei/cuartos/" + cuartoId + "/refrigeracion/cmd";
+        // T-10-03: publicar estado resultante de refrigeración al 100%.
+        // El back publica en /refrigeracion/estado (no /cmd, que es el topic
+        // de comandos entrantes desde el HMI). El motivo viaja como
+        // FORZADO_MANUAL para que el HMI muestre el badge correcto.
+        String topic = "sei/cuartos/" + cuartoId + "/refrigeracion/estado";
         publicar(topic, Map.of(
                 "cuarto_id",    cuartoId,
                 "potencia_pct", 100,
-                "modo",         "forzado",
+                "motivo",       "FORZADO_MANUAL",
                 "operador_id",  operadorId,
                 "timestamp",    Instant.now().toString()
         ));
@@ -269,11 +290,11 @@ public class ControlService {
 
         // T-10-05: temporizador de 10 minutos → revertir automáticamente
         ScheduledFuture<?> futuro = scheduler.schedule(() -> {
-            // Revertir a potencia base
+            // Revertir a potencia base — mismo topic /estado, motivo NORMAL.
             publicar(topic, Map.of(
                     "cuarto_id",    cuartoId,
                     "potencia_pct", potenciaBase,
-                    "modo",         "normal",
+                    "motivo",       "NORMAL",
                     "timestamp",    Instant.now().toString()
             ));
             // Persistir cancelación automática
@@ -293,20 +314,31 @@ public class ControlService {
     // ════════════════════════════════════════════════════════════════
 
     private void activarCortina(Integer cuartoId) {
-        publicar("sei/cuartos/" + cuartoId + "/cortina/cmd", Map.of(
-                "cuarto_id", cuartoId, "comando", "activar_cortina",
+        // El back publica el ESTADO de la cortina en /cortina (no /cortina/cmd,
+        // que sería un comando entrante). El HMI espera estado activa|inactiva.
+        publicar("sei/cuartos/" + cuartoId + "/cortina", Map.of(
+                "cuarto_id", cuartoId, "estado", "activa",
+                "origen", "automatico",
                 "timestamp", Instant.now().toString()));
     }
 
     private void desactivarCortina(Integer cuartoId) {
-        publicar("sei/cuartos/" + cuartoId + "/cortina/cmd", Map.of(
-                "cuarto_id", cuartoId, "comando", "desactivar_cortina",
+        publicar("sei/cuartos/" + cuartoId + "/cortina", Map.of(
+                "cuarto_id", cuartoId, "estado", "inactiva",
+                "origen", "automatico",
                 "timestamp", Instant.now().toString()));
     }
 
     private void ajustarRefrigeracion(Integer cuartoId, int potenciaPct) {
-        publicar("sei/cuartos/" + cuartoId + "/refrigeracion/cmd", Map.of(
+        // Estado de refrigeración del back → /refrigeracion/estado.
+        // Motivo se infiere del contexto: si la puerta está abierta es
+        // PUERTA_ABIERTA, si no es NORMAL.
+        String motivo = "abierta".equals(estadoPuertaActual.getOrDefault(cuartoId, "cerrada"))
+                ? "PUERTA_ABIERTA"
+                : "NORMAL";
+        publicar("sei/cuartos/" + cuartoId + "/refrigeracion/estado", Map.of(
                 "cuarto_id", cuartoId, "potencia_pct", potenciaPct,
+                "motivo", motivo,
                 "timestamp", Instant.now().toString()));
     }
 
@@ -397,6 +429,22 @@ public class ControlService {
                 tipoAccion,
                 "Operador ejecutó " + tipoAccion + " — puerta " + estado,
                 "operador");
+
+        // Sincronizar actuadores con el nuevo estado de la puerta.
+        // Antes el forzado manual no tocaba cortina/refrigeración (DEF-07):
+        // al forzar cierre la cortina seguía activa.
+        if ("abierta".equals(estado)) {
+            cancelarPendiente(pendientesCortina, cuartoId);
+            cancelarPendiente(pendientesRefrigeracion, cuartoId);
+            activarCortina(cuartoId);
+            refrigeracionService.subirPotencia(cuartoId);
+        } else {
+            cancelarPendiente(pendientesCortina, cuartoId);
+            cancelarPendiente(pendientesRefrigeracion, cuartoId);
+            desactivarCortina(cuartoId);
+            refrigeracionService.restaurarPotencia(cuartoId);
+        }
+
         log.info("[Cuarto {}] Puerta forzada MANUAL a '{}' por operador {} (tipo_accion={})",
                 cuartoId, estado, operadorId, tipoAccion);
     }

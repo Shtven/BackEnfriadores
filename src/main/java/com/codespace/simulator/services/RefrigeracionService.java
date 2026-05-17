@@ -79,10 +79,10 @@ public class RefrigeracionService {
         String topic = "sei/cuartos/" + cuartoId + "/refrigeracion/estado";
         try {
             String json = objectMapper.writeValueAsString(Map.of(
-                    "cuarto_id",  cuartoId,
-                    "potencia",   potencia,
-                    "motivo",     motivo,
-                    "timestamp",  Instant.now().toString()
+                    "cuarto_id",    cuartoId,
+                    "potencia_pct", potencia,
+                    "motivo",       motivo,
+                    "timestamp",    Instant.now().toString()
             ));
             mqttPublisher.publish(topic, json);
         } catch (Exception e) {
