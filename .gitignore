@@ -1,20 +1,37 @@
 HELP.md
+
+# Maven
 target/
-.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-### STS ###
+# Configuracion local con credenciales / overrides per-developer
+src/main/resources/application.properties
+src/main/resources/application-local.properties
+
+# Datos locales (H2 file-mode generado por application-local.properties)
+.data/
+
+# Artefactos de ejecucion del backend (PID, logs de proceso)
+backend.pid
+backend_err.log
+backend_run.log
+
+### STS / Eclipse ###
 .apt_generated
 .classpath
 .factorypath
 .project
-.settings
+.settings/
 .springBeans
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -31,3 +48,16 @@ build/
 
 ### VS Code ###
 .vscode/
+*.suo
+*.user
+
+### Sistema operativo ###
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Variables de entorno
+.env

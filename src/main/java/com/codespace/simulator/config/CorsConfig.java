@@ -26,7 +26,7 @@ public class CorsConfig {
                 "http://127.0.0.1:5173",
                 "http://192.168.1.*:5173"       // cualquier maquina del LAN del aula (opcional, util si moves de equipo)
         ));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);

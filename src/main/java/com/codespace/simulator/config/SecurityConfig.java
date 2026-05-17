@@ -36,6 +36,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/login").permitAll()
+                        // Registro dinamico de usuarios: publico (HACCP).
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/usuarios/registro").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
